@@ -1,0 +1,151 @@
+// ======================================
+// PRISMA SCHEMA - TASKFLOW
+// ======================================
+// Ce fichier définit la structure de la base de données
+// Documentation: https://pris.ly/d/prisma-schema
+// Exécutez "npx prisma migrate dev" après les modifications
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ======================================
+// MODÈLE UTILISATEUR
+// Représente un membre de la plateforme
+// ======================================
+model User {
+  id            String        @id @default(uuid())
+  name          String        // Nom complet de l'utilisateur
+  email         String        @unique // Email unique pour l'authentification
+  clerkId       String?       @unique // ID unique de Clerk (authentification externe)
+  role          String        @default("member") // "admin" ou "member"
+  avatar        String?       // URL de l'avatar
+  createdAt     DateTime      @default(now()) // Date d'inscription
+  updatedAt     DateTime      @updatedAt
+  
+  // Relations - Tâches assignées à cet utilisateur
+  tasks         Task[]        @relation("AssignedTasks")
+  
+  // Relations - Tâches créées par cet utilisateur
+  createdTasks  Task[]        @relation("CreatedByUser")
+  
+  // Relations - Projets créés par cet utilisateur
+  projects      Project[]     @relation("CreatedByUser")
+  
+  // Relations - Appartenances aux projets
+  userProjects  ProjectUser[]
+  
+  // Relations - Commentaires créés par cet utilisateur
+  comments      Comment[]
+}
+
+// ======================================
+// MODÈLE PROJET
+// Contient les informations d'un projet collaboratif
+// ======================================
+model Project {
+  id            String        @id @default(uuid())
+  title         String        // Titre du projet
+  description   String?       // Description détaillée
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  
+  // Créateur du projet (relation avec User)
+  createdById   String
+  createdBy     User          @relation("CreatedByUser", fields: [createdById], references: [id], onDelete: Cascade)
+  
+  // Code d'invitation unique pour partager le projet
+  inviteCode    String        @unique
+  
+  // Relations - Tâches du projet
+  tasks         Task[]
+  
+  // Relations - Membres du projet
+  users         ProjectUser[]
+}
+
+// ======================================
+// MODÈLE TÂCHE
+// Unité de travail à l'intérieur d'un projet
+// ======================================
+model Task {
+  id                    String    @id @default(uuid())
+  title                 String    // Titre de la tâche
+  description           String?   // Description détaillée
+  
+  // Statut de la tâche
+  status                String    @default("todo") // "todo", "in_progress", "done"
+  
+  // Priorité de la tâche
+  priority              String    @default("medium") // "low", "medium", "high"
+  
+  // Dates importantes
+  dueDate               DateTime? // Date d'échéance
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  
+  // Relation avec le projet
+  projectId             String
+  project               Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  // Utilisateur assigné à la tâche (optionnel)
+  assignedToId          String?
+  assignedTo            User?     @relation("AssignedTasks", fields: [assignedToId], references: [id])
+  
+  // Utilisateur qui a créé la tâche
+  createdById           String
+  createdBy             User      @relation("CreatedByUser", fields: [createdById], references: [id])
+  
+  // Description de la solution (pour tâches complétées)
+  solutionDescription   String?
+  
+  // Relations - Commentaires sur cette tâche
+  comments              Comment[]
+}
+
+// ======================================
+// MODÈLE ASSOCIATION PROJET-UTILISATEUR
+// Gère l'appartenance d'un utilisateur à un projet
+// ======================================
+model ProjectUser {
+  id            String    @id @default(uuid())
+  
+  // Relation avec l'utilisateur
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Relation avec le projet
+  projectId     String
+  project       Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  // Timestamps
+  joinedAt      DateTime  @default(now())
+  
+  // Contrainte d'unicité : un utilisateur ne peut pas être ajouté deux fois au même projet
+  @@unique([userId, projectId])
+}
+
+// ======================================
+// MODÈLE COMMENTAIRE (Bonus - Collaboration)
+// Permet les commentaires sur les tâches
+// ======================================
+model Comment {
+  id            String    @id @default(uuid())
+  content       String    // Texte du commentaire
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  // Utilisateur qui a créé le commentaire
+  authorId      String
+  author        User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  
+  // Tâche associée au commentaire
+  taskId        String
+  task          Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+}
+
